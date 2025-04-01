@@ -198,6 +198,22 @@ const getUserBets = async (req, res) => {
   }
 };
 
+
+const getAllMatchOddsBets = async (req, res) => {
+  try {
+    console.log("ok111")
+    const { matchname } = req.params
+    console.log(matchname, "matchname")
+    const bets = await MarketLK.find({ match: matchname });
+    console.log(bets)
+    res.status(200).json({ success: true, bets });
+  } catch (error) {
+    console.error('Error fetching bets:', error);
+    res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+};
+
+
 const getUserBetByLabel = async (req, res) => {
   try {
     const { match } = req.params;
@@ -323,4 +339,4 @@ const fatchrecentresultdeclation = async (req, res) => {
   }
 };
 
-module.exports = { placeBet, getUserBets, getwalletandexposure, getUniqueMatchesAndLabels, submitNewDeclaration, fatchrecentresultdeclation, updateResult, resetAllData, getUserBetByLabel };
+module.exports = {getAllMatchOddsBets, placeBet, getUserBets, getwalletandexposure, getUniqueMatchesAndLabels, submitNewDeclaration, fatchrecentresultdeclation, updateResult, resetAllData, getUserBetByLabel };
