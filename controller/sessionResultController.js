@@ -15,14 +15,12 @@ const createSessionResult = async (req, res) => {
 
         for (let bet of betData) {
             let updatedStatus = "loss"; // Default to loss
-
             // Determine win/loss based on runs
-            if (bet.mode === "no" && parseInt(runs) < parseInt(noRuns)) {
+            if (bet.mode === "no" && parseInt(runs) < parseInt(bet.noRuns)) {
                 updatedStatus = "win";
-            } else if (bet.mode === "yes" && parseInt(runs) > parseInt(yesRuns)) {
+            } else if (bet.mode === "yes" && parseInt(runs) > parseInt(bet.yesRuns)) {
                 updatedStatus = "win";
             }
-
             // Update the bet result
             bet.result = updatedStatus;
             await bet.save();
@@ -30,12 +28,11 @@ const createSessionResult = async (req, res) => {
             // Ensure exposure and profit values are numbers
             const betExposure = Math.abs(bet.exposure) || 0;
             const betProfit = Math.abs(bet.profitA) || 0;
-            console.log(betExposure, betProfit, "betProft")
+            // console.log(betExposure, betProfit, "betProft")
             // Accumulate wallet updates
             if (!userWalletUpdates[bet.userId]) {
                 userWalletUpdates[bet.userId] = { balanceChange: 0, exposureChange: 0 };
             }
-
             if (updatedStatus === "win") {
                 console.log(updatedStatus, "yes");
                 userWalletUpdates[bet.userId].balanceChange += (betProfit + betExposure);
@@ -45,29 +42,24 @@ const createSessionResult = async (req, res) => {
                 userWalletUpdates[bet.userId].exposureChange -= betExposure; // Still reset only this bet's exposure
             }
         }
-
         // Apply accumulated wallet updates
         for (let userId in userWalletUpdates) {
             const userWallet = await User_wallet.findOne({ user: userId });
-
             if (userWallet) {
                 userWallet.balance += userWalletUpdates[userId].balanceChange;
                 userWallet.exposureBalance += userWalletUpdates[userId].exposureChange; // Only adjust exposure for this bet
                 await userWallet.save();
             }
         }
-
         // Save session result
         const sessionResult = new SessionResult({ runs });
         await sessionResult.save();
-
         res.status(201).json({ success: true, data: sessionResult });
     } catch (error) {
         console.error(error);
         res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }
 };
-
 
 // Get all session results
 const getAllSessionResults = async (req, res) => {
@@ -144,9 +136,8 @@ const resetSession = async (req, res) => {
             }
 
             userWallet.balance += Math.abs(bet.exposure);
-            userWallet.exposureBalance = 0
+            userWallet.exposureBalance -= Math.abs(bet.exposure)
             bet.exposure = 0;
-
             await bet.save();
         }
 
