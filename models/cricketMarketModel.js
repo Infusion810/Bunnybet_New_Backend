@@ -89,6 +89,12 @@ const BetSchema = new mongoose.Schema({
         type: Number,
         // required: true
     },
+    yesRuns:{
+        type: Number
+    },
+    noRuns:{
+        type: Number
+    },
     result:{type:String, default:"Pending"},
 }, { timestamps: true });
 
