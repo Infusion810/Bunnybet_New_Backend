@@ -43,7 +43,6 @@ exports.postBet = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
-
 exports.updateBet = async (req, res) => {
     try {
         // console.log("Bet API Called");
@@ -69,8 +68,6 @@ exports.updateBet = async (req, res) => {
         // Update wallet balance
         if (isWin) {
             wallet.balance += profit;
-        }else{
-            wallet.exposureBalance += totalBets
         }
         // console.log(
         // wallet, "wallet")
