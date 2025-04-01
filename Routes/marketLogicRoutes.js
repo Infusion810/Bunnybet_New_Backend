@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { placeBet, getUserBets , getwalletandexposure,getUniqueMatchesAndLabels,submitNewDeclaration,fatchrecentresultdeclation, updateResult, resetAllData, getUserBetByLabel} = require('../controller/marketLogicController');
+const {getAllMatchOddsBets, placeBet, getUserBets , getwalletandexposure,getUniqueMatchesAndLabels,submitNewDeclaration,fatchrecentresultdeclation, updateResult, resetAllData, getUserBetByLabel} = require('../controller/marketLogicController');
 const router = express.Router();
 
 
@@ -13,4 +13,5 @@ router.get('/admin/fatchrecentresultdeclation', fatchrecentresultdeclation);
 router.post('/admin/matchodds/resultdeclaration', updateResult);
 router.post('/admin/matchodds/resetAllData', resetAllData);
 router.get('/admin/matchodds/getUserBetByLabel/:match', getUserBetByLabel);
+router.get('/admin/match_odds_getuserBets/:matchname', getAllMatchOddsBets);
 module.exports = router;
