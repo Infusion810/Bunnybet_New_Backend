@@ -4,7 +4,7 @@ const MatchK = require("../models/marketLogicModel")
 // Create a new bet
 exports.createBet = async (req, res) => {
     try {
-        console.log("Received Data:", req.body);
+        // console.log("Received Data:", req.body);
         const { myBets } = req.body;
 
         if (!myBets || !Array.isArray(myBets)) {
@@ -25,7 +25,8 @@ exports.createBet = async (req, res) => {
                 teamBProfit: profitB,
                 balance,
                 exposure,
-                currentExposure
+                currentExposure,
+                runs
             } = betData;
 
             const parsedExposure = Number(currentExposure) || 0;
@@ -45,6 +46,9 @@ exports.createBet = async (req, res) => {
 
             console.log(`Updated wallet for ${userId}: Balance = ${userWallet.balance}, Exposure = ${userWallet.exposureBalance}`);
 
+            // Determine where to store 'runs'
+            const YesRuns = mode === "yes" ? runs : undefined;
+            const NoRuns = mode === "no" ? runs : undefined;
             // Create Bet Entry
             const bet = new Bet({
                 userId,
@@ -56,7 +60,9 @@ exports.createBet = async (req, res) => {
                 profitA,
                 profitB,
                 balance,
-                exposure
+                exposure,
+                yesRuns: YesRuns,
+                noRuns: NoRuns
             });
 
             betsToSave.push(bet);
@@ -79,13 +85,11 @@ exports.createBet = async (req, res) => {
 };
 
 
-
-
 // Get all bets
 exports.getAllBets = async (req, res) => {
     try {
         const bets = await Bet.find();
-        console.log(bets, "bets");
+        // console.log(bets, "bets");
         res.json(bets);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -100,7 +104,7 @@ exports.getBetsByUser = async (req, res) => {
 
         const bets = await Bet.find({ userId: req.params.userId }).sort({ createdAt: -1 });
 
-        
+
 
         res.json(bets);
     } catch (error) {
