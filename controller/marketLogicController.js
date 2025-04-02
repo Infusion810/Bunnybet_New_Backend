@@ -77,22 +77,32 @@ const placeBet = async (req, res) => {
 const updateResult = async (req, res) => {
   try {
     const { matchName, result } = req.body;
-    console.log("Request Data:", req.body);
 
     // Fetch bets for this match
-    const marketOddsData = await MarketLK.find({ label: matchName });
+    const marketOddsData = await MarketLK.find({ label: matchName }).sort({ createdAt: 1 }); // Sort by creation time
 
     if (!marketOddsData.length) {
       return res.status(404).json({ success: false, message: "No market data found for this match" });
     }
 
     const userWalletUpdates = {};
+    const userLastBets = {};
 
-    for (const bet of marketOddsData) {
+    // First, find the last bet for each user
+    marketOddsData.forEach(bet => {
+      const userId = bet.user.toString();
+      if (!userLastBets[userId] || bet.createdAt > userLastBets[userId].createdAt) {
+        userLastBets[userId] = bet;
+      }
+    });
+
+    // Process only the last bets
+    for (const userId in userLastBets) {
+      const bet = userLastBets[userId];
+      
       bet.result = result; // Update result for each bet
       await bet.save(); // Save updated bet
 
-      const userId = bet.user.toString();
       // Fetch user wallet if not already retrieved
       if (!userWalletUpdates[userId]) {
         const userWallet = await User_Wallet.findOne({ user: userId });
@@ -101,32 +111,33 @@ const updateResult = async (req, res) => {
       }
       const userWallet = userWalletUpdates[userId];
 
-      // ✅ Convert values safely (default to 0 if undefined/null)
-      const exposure = Math.abs(Number(bet.exposure)) || 0;
-      const profitA = Number(bet.teamBProfit)
-      const profitB = Number(bet.teamAProfit)
+      // Convert values safely (default to 0 if undefined/null)
+      const exposure = Math.abs(Number(bet.exposure));
+      const profitA = Number(bet.teamBProfit);
+      const profitB = Number(bet.teamAProfit);
       const profit = profitA > 0 ? profitA : profitB > 0 ? profitB : 0;
 
-
-      // ✅ Prevent balance from being set to NaN
+      // Prevent balance from being set to NaN
       if (isNaN(exposure) || isNaN(profitA)) {
         console.error(`Invalid number detected: exposure=${bet.exposure}, profitA=${bet.profitA}`);
         continue; // Skip this bet to prevent errors
       }
 
-      // console.log()
       // Apply logic based on match result
       if (result === "Winner") {
-        console.log(userWallet, "userWallet")
-        userWallet.balance += profitA; // ✅ Ensure balance is a valid number
-        userWallet.exposureBalance = Math.max(0, (Number(userWallet.exposureBalance) || 0) - exposure); // ✅ Prevent negative exposure
-      }
-      else if (result === "Draw") {
+        userWallet.balance += (profit + exposure);
+        if (userWallet.exposureBalance > 0) {
+          userWallet.exposureBalance -= exposure;
+        }
+      } else if (result === "Draw") {
         userWallet.balance += exposure;
-        userWallet.exposureBalance = Math.max(0, (Number(userWallet.exposureBalance) || 0) - exposure); // ✅ Prevent negative exposure
-
+        if (userWallet.exposureBalance > 0) {
+          userWallet.exposureBalance -= exposure;
+        }
       } else {
-        userWallet.exposureBalance = Math.max(0, (Number(userWallet.exposureBalance) || 0) - exposure);
+        if (userWallet.exposureBalance > 0) {
+          userWallet.exposureBalance -= exposure;
+        }
       }
     }
 
@@ -145,52 +156,52 @@ const updateResult = async (req, res) => {
 const resetAllData = async (req, res) => {
   try {
     // Fetch all bets
-    const allBets = await MarketLK.find();
+    const { oddstype } = req.body
+    // if (oddstype == "lgaai" || oddstype == "khaai") {
+      // const allBets = await MarketLK.find({ type: oddstype });
+      const allBets = await MarketLK.find();
 
-    // Dictionary to track user wallet updates
-    const userWalletUpdates = new Map();
+      // Dictionary to track user wallet updates
+      const userWalletUpdates = new Map();
 
-    for (let bet of allBets) {
-      const userId = bet.user.toString();
+      for (let bet of allBets) {
+        const userId = bet.user.toString();
+        // Fetch user's wallet only if not already cached
+        if (!userWalletUpdates.has(userId)) {
+          const userWallet = await User_Wallet.findOne({ user: userId });
+          if (userWallet) userWalletUpdates.set(userId, userWallet);
+        }
+        const userWallet = userWalletUpdates.get(userId);
+        if (!userWallet) continue; // Skip if wallet not found
 
-      // Fetch user's wallet only if not already cached
-      if (!userWalletUpdates.has(userId)) {
-        const userWallet = await User_Wallet.findOne({ user: userId });
-        if (userWallet) userWalletUpdates.set(userId, userWallet);
+        // Add exposure amount back to balance
+        userWallet.balance += Math.abs(bet.exposure);
+        // userWallet.exposureBalance -= Math.abs(bet.exposure)
+        userWallet.exposureBalance = 0
+        // Reset exposure to 0
+        bet.exposure = 0;
+        await bet.save(); // Save the updated bet
       }
 
-      const userWallet = userWalletUpdates.get(userId);
-      if (!userWallet) continue; // Skip if wallet not found
+      // Save all updated wallets
+      for (const wallet of userWalletUpdates.values()) {
+        await wallet.save();
+      }
 
-      // Add exposure amount back to balance
-      userWallet.balance += Math.abs(bet.exposure);
-      userWallet.exposureBalance = 0
-
-      // Reset exposure to 0
-      bet.exposure = 0;
-      await bet.save(); // Save the updated bet
-    }
-
-    // Save all updated wallets
-    for (const wallet of userWalletUpdates.values()) {
-      await wallet.save();
-    }
-
-    res.status(200).json({ success: true, message: "All data has been reset, exposure added back to balances" });
-
+      res.status(200).json({ success: true, message: "All data has been reset, exposure added back to balances" });
+    // }
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: "Server Error", error: error.message });
   }
 };
 
-
 // Get bets by user
 const getUserBets = async (req, res) => {
   try {
-    const { userId } = req.params;
+    const { userId, match } = req.params;
     console.log(userId)
-    const bets = await MarketLK.find({ user: userId }).sort({ createdAt: -1 });
+    const bets = await MarketLK.find({ user: userId , match:match}).sort({ createdAt: -1 });
     res.status(200).json({ success: true, bets });
   } catch (error) {
     console.error('Error fetching bets:', error);
