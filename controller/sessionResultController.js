@@ -5,11 +5,11 @@ const User_wallet = require('../models/Wallet');
 
 const createSessionResult = async (req, res) => {
     try {
-        const { result, runs, matchName, noRuns, yesRuns } = req.body;
+        const { result, runs, matchName, noRuns, yesRuns, match } = req.body;
         console.log(req.body);
 
         // Fetch bet data for the match
-        const betData = await Bet.find({ matbet: matchName });
+        const betData = await Bet.find({ matchName: match, matbet: matchName });
 
         let userWalletUpdates = {}; // To track each user's wallet updates
 
@@ -23,6 +23,7 @@ const createSessionResult = async (req, res) => {
             }
             // Update the bet result
             bet.result = updatedStatus;
+            bet.winningRuns = runs;
             await bet.save();
 
             // Ensure exposure and profit values are numbers
