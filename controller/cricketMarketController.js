@@ -26,7 +26,8 @@ exports.createBet = async (req, res) => {
                 balance,
                 exposure,
                 currentExposure,
-                runs
+                runs,
+                matchName
             } = betData;
 
             const parsedExposure = Number(currentExposure) || 0;
@@ -62,9 +63,10 @@ exports.createBet = async (req, res) => {
                 balance,
                 exposure,
                 yesRuns: YesRuns,
-                noRuns: NoRuns
+                noRuns: NoRuns,
+                matchName
+            
             });
-
             betsToSave.push(bet);
         }
 
@@ -102,7 +104,7 @@ exports.getBetsByUser = async (req, res) => {
         console.log(req.params.userId);
         // const matchOddsData = await MatchK.find({ userId: req.params.userId }).sort({ createdAt: -1 });
 
-        const bets = await Bet.find({ userId: req.params.userId }).sort({ createdAt: -1 });
+        const bets = await Bet.find({ userId: req.params.userId, matchName:req.params.match }).sort({ createdAt: -1 });
 
 
 
@@ -115,6 +117,18 @@ exports.getBetsByMatch = async (req, res) => {
     try {
         // console.log(req.params.userId);
         const bets = await Bet.find({ matbet: req.params.matbet }).sort({ createdAt: -1 });
+        res.json(bets);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
+exports.getBetsByMatchNameAndSession = async (req, res) => {
+    try {
+        // console.log(req.params.userId);
+        const {matchName} = req.params
+        const bets = await Bet.find({ matchName: matchName }).sort({ createdAt: 1 });
+        console.log(bets)
+
         res.json(bets);
     } catch (error) {
         res.status(500).json({ error: error.message });
