@@ -13,7 +13,7 @@ router.get('/match/get-all/:id', matchController.getMatchById);
 router.get('/match/get-players-by-matchname/:matchName', matchController.getMatchByMatchName);
 
 
-router.delete('/delete/:id', matchController.deleteMatch);
+router.delete('/match/delete/:id', matchController.deleteMatch);
 router.put('/match/update/:id', matchController.updateMatch);
 
 module.exports = router;
