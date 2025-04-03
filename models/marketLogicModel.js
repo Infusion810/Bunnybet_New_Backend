@@ -16,6 +16,7 @@ const betSchema = new mongoose.Schema({
   status:{type:String, default:"live"},
   current_status:{type:String, default:"Pending"},
   result:{type:String, default:"N/A"},
+      teamIndex: { type: Number }
 });
 const MarketLK = mongoose.model('MarketLK', betSchema);
 
