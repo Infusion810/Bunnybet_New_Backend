@@ -208,6 +208,7 @@ exports.updateMatch = async (req, res) => {
 
 exports.deleteMatch = async (req, res) => {
   try {
+    console.log(req.params.id)
     const deletedMatch = await Match.findByIdAndDelete(req.params.id);
     if (!deletedMatch) return res.status(404).json({ message: 'Match not found' });
     res.status(200).json({ message: 'Match deleted successfully' });
