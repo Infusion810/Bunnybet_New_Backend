@@ -34,12 +34,18 @@ const crashAvaitorRouter = require('./Routes/crashAvaitorRoutes.js')
 const titliWinnerRouter = require("./Routes/titliWinnerRoutes.js")
 const marketLogicRoutes = require('./Routes/marketLogicRoutes.js')
 const sessionResultRoutes = require("./Routes/sessionResultRoutes.js")
+
+const aviatorSocketController = require('./controller/aviatorSocketController');
+
 const io = socketIo(server, {
   cors: {
     origin: "*",
+    methods: ["GET", "POST"]
   },
 });
 
+// Initialize the Aviator game socket controller
+aviatorSocketController.initializeGame(io);
 
 port = 5000
 // CORS configuration
