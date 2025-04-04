@@ -29,8 +29,8 @@ exports.createBet = async (req, res) => {
                 runs,
                 matchName
             } = betData;
-
-            const parsedExposure = Number(currentExposure) || 0;
+            const parsedExposure = Math.abs(Number(exposure) || 0);
+            // const parsedExposure = Number(currentExposure) || 0;
 
             // Check if user wallet exists
             let userWallet = await User_Wallet.findOne({ user: userId });
