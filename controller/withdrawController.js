@@ -196,7 +196,7 @@ exports.updatebankQr = async (req, res) => {
     }
     const upload = await cloudinary.v2.uploader.upload(req.file.path);
 
-    const qrCodePath = uploads/${req.file.filename};
+    const qrCodePath = `uploads/${req.file.filename}`;
 console.log(upload.secure_url)
     let bankDetails = await bankDetailsModel.findOne();
     if (bankDetails) {
