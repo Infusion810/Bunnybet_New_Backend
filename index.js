@@ -34,7 +34,7 @@ const crashAvaitorRouter = require('./Routes/crashAvaitorRoutes.js')
 const titliWinnerRouter = require("./Routes/titliWinnerRoutes.js")
 const marketLogicRoutes = require('./Routes/marketLogicRoutes.js')
 const sessionResultRoutes = require("./Routes/sessionResultRoutes.js")
-
+const pagesRoute = require('./Routes/pagesRoute.js')
 const aviatorSocketController = require('./controller/aviatorSocketController');
 
 const io = socketIo(server, {
@@ -531,6 +531,7 @@ app.use('/api', titliWinnerRouter);
 app.use("/api", marketLogicRoutes);
 app.use("/", cricketMarketRoutes);
 app.use("/", sessionResultRoutes);
+app.use("/api", pagesRoute);
 let liveData = {
   matches: [],
   odds: {},
