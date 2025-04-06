@@ -685,7 +685,7 @@ const submitNewDeclaration = async (req, res) => {
       // Check conditions and update wallet
       if ((bet.match === match && bet.label === winner && resultType == "Winner")) {
         // User wins
-        if (profitA > 0) {
+        if (profitA > 0&&profitB<0) {
           userWallet.balance += Number(profitA) + Number(userWallet.exposureBalance);
           userWallet.exposureBalance -= Math.abs(Number(profitB));
         }
@@ -696,7 +696,7 @@ const submitNewDeclaration = async (req, res) => {
         // userWallet.balance += bet.teamAProfit;
       } else if ((bet.match === match && bet.label === winner && resultType == "loss")) {
         // User wins
-        if (profitB > 0) {
+        if (profitB > 0&&profitA<0) {
           userWallet.balance += Number(profitB) + Number(userWallet.exposureBalance);
           userWallet.exposureBalance -= Number(profitA);
         } else {
