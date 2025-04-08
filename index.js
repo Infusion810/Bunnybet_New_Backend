@@ -15,6 +15,10 @@ const cricketMarketRoutes = require('./Routes/cricketMarketRoutes');
 const cheerio = require('cheerio');
 const moment = require('moment'); // For Node.js
 app.use(express.json());
+
+// Initialize application data and caches
+app.locals.betCache = null;
+
 const betRoutes = require('./Routes/betRoutes');
 const matkaRouter = require('./Routes/matkaRoutes.js');
 const Matka = require('./models/matkaModel.js')
@@ -34,9 +38,6 @@ const crashAvaitorRouter = require('./Routes/crashAvaitorRoutes.js')
 const titliWinnerRouter = require("./Routes/titliWinnerRoutes.js")
 const marketLogicRoutes = require('./Routes/marketLogicRoutes.js')
 const sessionResultRoutes = require("./Routes/sessionResultRoutes.js")
-const pagesRoute = require('./Routes/pagesRoute.js')
-const aviatorSocketController = require('./controller/aviatorSocketController');
-const deletedataRoute = require("./Routes/deletedataRoute")
 const io = socketIo(server, {
   cors: {
     origin: "*",
@@ -59,7 +60,7 @@ app.use(
 );
 app.use(cors());
 
-const MONGO_URI = process.env.mongodb_url;   
+const MONGO_URI = process.env.mongodb_url;
 // MongoDB connection
 mongoose.connect(`mongodb+srv://siddharthojha421:yPlKyyZpefa9Y5lJ@cluster0.rtjwl.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`)
   .then(() => console.log("MongoDB Connected Successfully!"))
@@ -531,8 +532,78 @@ app.use('/api', titliWinnerRouter);
 app.use("/api", marketLogicRoutes);
 app.use("/", cricketMarketRoutes);
 app.use("/", sessionResultRoutes);
-app.use("/api", pagesRoute);
-app.use("/api",deletedataRoute);
+
+// Add endpoint for fetching matches by sport ID
+app.get('/api/matches/:sportId', (req, res) => {
+  const { sportId } = req.params;
+  
+  // For cricket (sportId = 4), return the live matches
+  if (sportId === '4') {
+    // Format data to match expected frontend structure
+    const formattedMatches = liveData.matches.map(match => ({
+      id: match.eventId,
+      matchId: match.eventId,
+      name: match.matchName,
+      event_date: new Date().toISOString(), // Current date as this is live
+      league: { name: 'Cricket League' },
+      status: 'live',
+      marketId: match.marketId,
+      scoreIframe: match.scoreIframe
+    }));
+    
+    return res.json({
+      success: true,
+      data: formattedMatches
+    });
+  }
+  
+  // For other sports, return empty array for now
+  // TODO: Implement other sports
+  return res.json({
+    success: true,
+    data: []
+  });
+});
+
+// Define endpoint for match details
+app.get('/api/match/:eventId', (req, res) => {
+  const { eventId } = req.params;
+  
+  // Find the match in liveData
+  const match = liveData.matches.find(m => m.eventId === eventId);
+  
+  if (!match) {
+    return res.status(404).json({
+      success: false,
+      message: 'Match not found'
+    });
+  }
+  
+  // Get odds for this match
+  const matchOdds = liveData.odds[match.marketId] || {};
+  
+  // Format response
+  const matchData = {
+    match: {
+      id: match.eventId,
+      name: match.matchName,
+      marketId: match.marketId,
+      scoreIframe: match.scoreIframe,
+      status: 'OPEN',
+      runners: matchOdds.matchOdds || [],
+      minStake: 100,
+      maxStake: 10000,
+      betDelay: 0
+    },
+    markets: [],
+    fancyMarkets: matchOdds.fancyMarkets || [],
+    bookmakers: [],
+    upcoming: []
+  };
+  
+  return res.json(matchData);
+});
+
 let liveData = {
   matches: [],
   odds: {},
@@ -631,635 +702,547 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => console.log("Client disconnected"));
 });
 
-
-
-
 // Titli Game WebSocket Implementation
-
 let titliGameState = {
-
   currentRound: null,
-
   gamePhase: 'betting', // 'betting' or 'result'
-
   timeRemaining: 30,
-
   winningImage: null,
-
   winningImageNumber: null,
-
   bettingOpen: true,
-
   participants: new Set(),
-
   roundStartTime: null
-
 };
-
-
 
 // Make titliGameState globally available
-
 global.titliGameState = titliGameState;
 
+// Initialize forcedWinner variable to track admin-selected winners
+global.forcedWinner = null;
 
-
-// Function to generate a unique round ID
-
-const generateRoundId = () => {
-
-  const date = new Date();
-
-  return `T${date.getTime().toString().padStart(3, '0')}`;
-
-};
-
-
-
-// Start a new Titli game round
-
-const startNewTitliRound = async () => {
-
-  try {
-
-    // Reset game state for a new round
-
-    titliGameState.currentRound = generateRoundId();
-
-    titliGameState.gamePhase = 'betting';
-
-    titliGameState.timeRemaining = 30;
-
-    titliGameState.bettingOpen = true;
-
-    titliGameState.participants = new Set();
-
-    titliGameState.roundStartTime = Date.now();
-
-    titliGameState.winningImage = null;
-
-    titliGameState.winningImageNumber = null;
-
+// Add health check route to verify game is running
+app.get('/api/titli/health', (req, res) => {
+  // If titliGameState doesn't exist or doesn't have a currentRound, start a new round
+  if (!titliGameState || !titliGameState.currentRound) {
+    console.log('Health check detected inactive game - initializing new round');
+    startNewTitliRound();
     
-
-    // Broadcast new round start to all clients
-
-    io.emit('titli:roundStart', {
-
-      roundId: titliGameState.currentRound,
-
-      timeRemaining: titliGameState.timeRemaining
-
-    });
-
-    
-
-    console.log(`New Titli round started: ${titliGameState.currentRound}`);
-
-  } catch (error) {
-
-    console.error('Error starting new Titli round:', error);
-
-  }
-
-};
-
-
-
-// End betting phase and determine winning image
-
-const endTitliBettingPhase = async () => {
-
-  try {
-
-    titliGameState.bettingOpen = false;
-
-    titliGameState.gamePhase = 'result';
-
-    
-
-    // Get the winning image from database (admin-selected)
-
-    const titliWinnerModel = require('./models/TitliWinner');
-
-    const allowedEntries = await titliWinnerModel.find({ "Images.isAllowed": true });
-
-    
-
-    if (!allowedEntries.length) {
-
-      console.error('No allowed images found for revealing result');
-
-      return;
-
-    }
-
-    
-
-    // Flatten all allowed images into a single array
-
-    const allAllowedImages = allowedEntries.flatMap(entry =>
-
-      entry.Images.filter(img => img.isAllowed)
-
-    );
-
-    
-
-    if (!allAllowedImages.length) {
-
-      console.error('No allowed images found in the flattened array');
-
-      return;
-
-    }
-
-    
-
-    // Select a random image from allowed ones
-
-    const randomImage = allAllowedImages[Math.floor(Math.random() * allAllowedImages.length)];
-
-    titliGameState.winningImage = randomImage.image;
-
-    
-
-    // Find the image number based on the image name
-
-    if (randomImage.imageNumber) {
-
-      titliGameState.winningImageNumber = randomImage.imageNumber;
-
-    } else {
-
-      // If the image doesn't have a number, find it from our static mapping
-
-      const imageMapping = {
-
-        "butterfly.jpg": 1,
-
-        "cow.jpg": 2,
-
-        "football.jpg": 3,
-
-        "spin.jpg": 4,
-
-        "flower.webp": 5,
-
-        "diya.webp": 6,
-
-        "bucket.jpg": 7,
-
-        "kite.webp": 8,
-
-        "rat.webp": 9,
-
-        "umberlla.jpg": 10,
-
-        "parrot.webp": 11,
-
-        "sun.webp": 12
-
-      };
-
-      titliGameState.winningImageNumber = imageMapping[randomImage.image] || null;
-
-    }
-
-    
-
-    // Broadcast result to all clients
-
-    io.emit('titli:revealResult', {
-
-      roundId: titliGameState.currentRound,
-
-      winningImage: titliGameState.winningImage,
-
-      winningImageNumber: titliGameState.winningImageNumber
-
-    });
-
-    
-
-    // Process winners for this round
-
-    processWinners(titliGameState.currentRound, titliGameState.winningImage, titliGameState.winningImageNumber);
-
-    
-
-    console.log(`Titli round ${titliGameState.currentRound} result revealed: ${titliGameState.winningImage} (Number: ${titliGameState.winningImageNumber})`);
-
-    
-
-    // Wait 5 seconds before starting a new round
-
+    // Allow time for initialization before responding
     setTimeout(() => {
-
-      startNewTitliRound();
-
-    }, 5000);
-
-  } catch (error) {
-
-    console.error('Error ending Titli betting phase:', error);
-
-  }
-
-};
-
-
-
-// Process bet winners for a completed round
-
-const processWinners = async (roundId, winningImage, winningImageNumber) => {
-
-  try {
-
-    const User_Wallet = require('./models/Wallet');
-
-    const PappuModel = require('./models/papuModel');
-
-    
-
-    // Find all bets for this round
-
-    const bets = await PappuModel.find({ 
-
-      titliGameId: roundId
-
-    });
-
-    
-
-    console.log(`Processing ${bets.length} bets for round ${roundId}`);
-
-    
-
-    // Get image to number mapping
-
-    const titliWinnerModel = require('./models/TitliWinner');
-
-    const imageData = await titliWinnerModel.find().sort({ createdAt: -1 }).limit(1);
-
-    
-
-    let imageNumberMapping = {};
-
-    if (imageData.length > 0 && imageData[0].Images) {
-
-      imageData[0].Images.forEach(img => {
-
-        imageNumberMapping[img.image] = img.imageNumber;
-
-      });
-
-    } else {
-
-      // Fallback hardcoded mapping
-
-      imageNumberMapping = {
-
-        "butterfly.jpg": 1,
-
-        "cow.jpg": 2,
-
-        "football.jpg": 3,
-
-        "spin.jpg": 4,
-
-        "flower.webp": 5,
-
-        "diya.webp": 6,
-
-        "bucket.jpg": 7,
-
-        "kite.webp": 8,
-
-        "rat.webp": 9,
-
-        "umberlla.jpg": 10,
-
-        "parrot.webp": 11,
-
-        "sun.webp": 12
-
-      };
-
-    }
-
-    
-
-    // Process each bet
-
-    for (const bet of bets) {
-
-      console.log(`Processing bet for user: ${bet.user}, game: ${roundId}`);
-
-      console.log(`Bet selected cards:`, bet.selectedCard);
-
-      
-
-      const userSelectedCards = bet.selectedCard || [];
-
-      let isWin = false;
-
-      let totalProfit = 0;
-
-      
-
-      // Determine if any selected card matches the winning image/number
-
-      for (const card of userSelectedCards) {
-
-        const cardImage = card.image;
-
-        const cardImageNumber = imageNumberMapping[cardImage];
-
-        
-
-        console.log(`Checking card: ${cardImage} (${cardImageNumber}) against winner: ${winningImage} (${winningImageNumber})`);
-
-        
-
-        // Winning condition: either image name matches OR image number matches
-
-        if (cardImage === winningImage || cardImageNumber === winningImageNumber) {
-
-          isWin = true;
-
-          const betAmount = card.betAmount || 0;
-
-          // Calculate profit (10x the bet amount)
-
-          const profit = betAmount * 10;
-
-          totalProfit += profit;
-
-          console.log(`WIN! User ${bet.user} won ${profit} on ${cardImage}`);
-
+      res.status(200).json({
+        status: 'Game initialized',
+        gameState: {
+          roundId: titliGameState.currentRound,
+          gamePhase: titliGameState.gamePhase,
+          timeRemaining: titliGameState.timeRemaining,
+          bettingOpen: titliGameState.bettingOpen
         }
-
-      }
-
-      
-
-      // Update bet with result
-
-      bet.isCompleted = true;
-
-      bet.isWin = isWin;
-
-      bet.profit = totalProfit;
-
-      bet.winningImage = winningImage;
-
-      await bet.save();
-
-      
-
-      // If win, update user wallet
-
-      if (isWin && totalProfit > 0) {
-
-        try {
-
-          // First try with userId field
-
-          let userWallet = await User_Wallet.findOne({ userId: bet.user });
-
-          
-
-          // If not found, try directly with user field
-
-          if (!userWallet) {
-
-            userWallet = await User_Wallet.findOne({ user: bet.user });
-
-          }
-
-          
-
-          // If still not found, try with user as string
-
-          if (!userWallet) {
-
-            userWallet = await User_Wallet.findOne({ userId: bet.user.toString() });
-
-          }
-
-          
-
-          if (userWallet) {
-
-            console.log(`Found wallet for user ${bet.user}, current balance: ${userWallet.balance}`);
-
-            userWallet.balance += totalProfit;
-
-            await userWallet.save();
-
-            console.log(`Updated wallet balance to ${userWallet.balance} (+${totalProfit})`);
-
-            
-
-            // Emit win notification to user
-
-            io.emit('titli:winResult', {
-
-              userId: bet.user.toString(),
-
-              profit: totalProfit,
-
-              winningImage,
-
-              winningImageNumber
-
-            });
-
-            
-
-            console.log(`User ${bet.user} won ${totalProfit} on round ${roundId}`);
-
-          } else {
-
-            console.error(`Wallet not found for user ${bet.user}. Tried userId and user fields.`);
-
-          }
-
-        } catch (err) {
-
-          console.error(`Error updating wallet for user ${bet.user}:`, err);
-
-        }
-
-      }
-
-    }
-
-    
-
-    console.log(`Finished processing winners for round ${roundId}`);
-
-  } catch (error) {
-
-    console.error('Error processing winners:', error);
-
-  }
-
-};
-
-
-
-// Update time remaining and broadcast to clients
-
-const updateTitliTimer = () => {
-
-  if (titliGameState.gamePhase === 'betting' && titliGameState.timeRemaining > 0) {
-
-    titliGameState.timeRemaining -= 1;
-
-    
-
-    // When 10 seconds or less remain, close betting
-
-    if (titliGameState.timeRemaining <= 10) {
-
-      titliGameState.bettingOpen = false;
-
-    }
-
-    
-
-    // Broadcast updated timer to all clients
-
-    io.emit('titli:timerUpdate', {
-
-      roundId: titliGameState.currentRound,
-
-      timeRemaining: titliGameState.timeRemaining,
-
-      bettingOpen: titliGameState.bettingOpen
-
-    });
-
-    
-
-    // When timer reaches 0, reveal result
-
-    if (titliGameState.timeRemaining === 0) {
-
-      endTitliBettingPhase();
-
-    }
-
-  }
-
-};
-
-
-
-// Start the Titli game on server startup
-
-startNewTitliRound();
-
-
-
-// Run timer update every second
-
-setInterval(updateTitliTimer, 1000);
-
-
-
-// Socket connection handler
-
-io.on('connection', (socket) => {
-
-  console.log(`Client connected: ${socket.id}`);
-
-  
-
-  // Handle client joining Titli game
-
-  socket.on('titli:join', () => {
-
-    // Send current game state to the client that just joined
-
-    socket.emit('titli:gameState', {
-
-      roundId: titliGameState.currentRound,
-
-      timeRemaining: titliGameState.timeRemaining,
-
-      gamePhase: titliGameState.gamePhase,
-
-      bettingOpen: titliGameState.bettingOpen,
-
-      winningImage: titliGameState.gamePhase === 'result' ? titliGameState.winningImage : null,
-
-      winningImageNumber: titliGameState.gamePhase === 'result' ? titliGameState.winningImageNumber : null
-
-    });
-
-    
-
-    titliGameState.participants.add(socket.id);
-
-    console.log(`Client ${socket.id} joined Titli game, round ${titliGameState.currentRound}`);
-
-  });
-
-  
-
-  // Handle client placing bet
-
-  socket.on('titli:placeBet', async (betData) => {
-
-    // Forward this to the frontend through API calls
-
-    console.log(`Client ${socket.id} placed bet in round ${titliGameState.currentRound}:`, betData);
-
-  });
-
-  
-
-  // Handle disconnection
-
-  socket.on('disconnect', () => {
-
-    titliGameState.participants.delete(socket.id);
-
-    console.log(`Client disconnected: ${socket.id}`);
-
-  });
-
-
-
-  // Handle client requesting next image reveal
-
-  socket.on('titli:requestNextImage', (data) => {
-
-    // Check if we have the winning image available
-
-    if (titliGameState.winningImage && data.gameId === titliGameState.currentRound) {
-
-      socket.emit('titli:nextImage', {
-
-        index: data.currentIndex + 1, // Next index
-
-        winningImage: titliGameState.winningImage,
-
-        winningImageNumber: titliGameState.winningImageNumber
-
       });
-
-    }
-
-  });
-
+    }, 500);
+  } else {
+    res.status(200).json({
+      status: 'Game running',
+      gameState: {
+        roundId: titliGameState.currentRound,
+        gamePhase: titliGameState.gamePhase,
+        timeRemaining: titliGameState.timeRemaining,
+        bettingOpen: titliGameState.bettingOpen,
+        roundStartTime: titliGameState.roundStartTime,
+        timestamp: Date.now()
+      }
+    });
+  }
 });
 
+// Function to generate a unique round ID
+const generateRoundId = () => {
+  const date = new Date();
+  return `T${date.getTime().toString().padStart(3, '0')}`;
+};
+
+// Start a new Titli game round
+const startNewTitliRound = async () => {
+  try {
+    // Reset game state for a new round but preserve image settings
+    const previousRound = titliGameState.currentRound;
+    titliGameState.currentRound = generateRoundId();
+    titliGameState.gamePhase = 'betting';
+    titliGameState.timeRemaining = 30;
+    titliGameState.bettingOpen = true;
+    titliGameState.participants = new Set();
+    titliGameState.roundStartTime = Date.now();
+    titliGameState.winningImage = null;
+    titliGameState.winningImageNumber = null;
+    
+    console.log(`Starting new Titli round: ${titliGameState.currentRound} (previous: ${previousRound})`);
+    
+    // Ensure we don't reset any image allowed/disallowed status
+    // The status needs to be preserved between rounds
+
+    // Broadcast new round start to all clients with more detailed information
+    io.emit('titli:roundStart', {
+      roundId: titliGameState.currentRound,
+      previousRound: previousRound,
+      timeRemaining: titliGameState.timeRemaining,
+      gamePhase: titliGameState.gamePhase,
+      bettingOpen: titliGameState.bettingOpen,
+      timestamp: Date.now()
+    });
+    
+    // Broadcast overall game state update to ensure all clients are in sync
+    io.emit('titli:gameState', {
+      roundId: titliGameState.currentRound,
+      timeRemaining: titliGameState.timeRemaining,
+      gamePhase: titliGameState.gamePhase,
+      bettingOpen: titliGameState.bettingOpen,
+      timestamp: Date.now()
+    });
+    
+    console.log(`New Titli round ${titliGameState.currentRound} started and broadcast to all clients`);
+  } catch (error) {
+    console.error('Error starting new Titli round:', error);
+    
+    // Ensure we continue the game despite errors
+    setTimeout(() => {
+      // Simple reset of essential fields
+      titliGameState.currentRound = generateRoundId();
+      titliGameState.gamePhase = 'betting';
+      titliGameState.timeRemaining = 30;
+      titliGameState.bettingOpen = true;
+      
+      // Broadcast the new round
+      io.emit('titli:roundStart', {
+        roundId: titliGameState.currentRound,
+        timeRemaining: titliGameState.timeRemaining,
+        gamePhase: titliGameState.gamePhase,
+        bettingOpen: true,
+        timestamp: Date.now()
+      });
+      
+      console.log(`Recovery - New Titli round started: ${titliGameState.currentRound}`);
+    }, 2000);
+  }
+};
+
+// Update time remaining and broadcast to clients
+const updateTitliTimer = () => {
+  if (!titliGameState || !titliGameState.currentRound) {
+    return; // Skip if game state isn't initialized yet
+  }
+  
+  if (titliGameState.gamePhase === 'betting' && titliGameState.timeRemaining > 0) {
+    titliGameState.timeRemaining -= 1;
+    
+    // When 15 seconds or less remain, close betting
+    if (titliGameState.timeRemaining === 15) {
+      console.log(`Closing betting for round ${titliGameState.currentRound} (15 seconds remaining)`);
+      titliGameState.bettingOpen = false;
+    }
+    
+    // Broadcast updated timer to all clients with enhanced information
+    io.emit('titli:timerUpdate', {
+      roundId: titliGameState.currentRound,
+      timeRemaining: titliGameState.timeRemaining,
+      gamePhase: titliGameState.gamePhase,
+      bettingOpen: titliGameState.bettingOpen,
+      timestamp: Date.now(),
+      thresholdReached: titliGameState.timeRemaining <= 15
+    });
+    
+    // Log significant time thresholds for debugging
+    if (titliGameState.timeRemaining === 20 || 
+        titliGameState.timeRemaining === 15 || 
+        titliGameState.timeRemaining === 10 || 
+        titliGameState.timeRemaining === 5) {
+      console.log(`Titli round ${titliGameState.currentRound}: ${titliGameState.timeRemaining} seconds remaining`);
+    }
+    
+    // When timer reaches 2 seconds remaining (28 seconds elapsed), reveal result
+    if (titliGameState.timeRemaining === 0) {
+      console.log(`Triggering end of betting phase for round ${titliGameState.currentRound}`);
+      endTitliBettingPhase();
+    }
+  }
+};
+
+// End betting phase and determine winning image
+const endTitliBettingPhase = async () => {
+  try {
+    if (titliGameState.gamePhase !== 'betting') {
+      console.log('Betting phase already ended, skipping duplicate call');
+      return;
+    }
+    
+    titliGameState.bettingOpen = false;
+    titliGameState.gamePhase = 'result';
+    
+    // Check for admin-forced winner and log it clearly
+    console.log('Checking for forced winner:', global.forcedWinner);
+    
+    // Check if we have a forced winner set by admin for this round
+    if (global.forcedWinner && global.forcedWinner.roundId === titliGameState.currentRound) {
+      console.log(`Using admin-forced winner: ${global.forcedWinner.image} (${global.forcedWinner.imageNumber}) for round ${titliGameState.currentRound}`);
+      
+      titliGameState.winningImage = global.forcedWinner.image;
+      titliGameState.winningImageNumber = global.forcedWinner.imageNumber;
+      
+      // Clear the forced winner to prevent it from affecting future rounds
+      const usedForcedWinner = {...global.forcedWinner};
+      global.forcedWinner = null;
+      
+      console.log(`Admin-selected winner has been applied. Image: ${titliGameState.winningImage}, Number: ${titliGameState.winningImageNumber}`);
+      
+      // Broadcast result
+      io.emit('titli:revealResult', {
+        roundId: titliGameState.currentRound,
+        winningImage: titliGameState.winningImage,
+        winningImageNumber: titliGameState.winningImageNumber,
+        adminSelected: true
+      });
+      
+      // Process winners
+      processWinners(titliGameState.currentRound, titliGameState.winningImage, titliGameState.winningImageNumber);
+      
+      // Start a new round after a delay
+      setTimeout(() => {
+        startNewTitliRound();
+      }, 5000);
+      
+      return;
+    } else {
+      console.log('No forced winner found for this round, proceeding with random selection');
+    }
+    
+    // If no forced winner, proceed with the normal logic of selecting from allowed images
+    // Get the latest image settings from database
+    const titliWinnerModel = require('./models/TitliWinner');
+    let allowedEntries;
+    
+    try {
+      // Get the most recent entry with all image data
+      const latestEntry = await titliWinnerModel.findOne().sort({ createdAt: -1 });
+      
+      if (!latestEntry) {
+        console.error('No image data found in database');
+        // Create a default entry with all images allowed
+        const defaultImages = [
+          { image: "butterfly.jpg", amount: 50, isAllowed: true, imageNumber: 1 },
+          { image: "cow.jpg", amount: 30, isAllowed: true, imageNumber: 2 },
+          { image: "football.jpg", amount: 20, isAllowed: true, imageNumber: 3 },
+          { image: "spin.jpg", amount: 25, isAllowed: true, imageNumber: 4 },
+          { image: "flower.webp", amount: 15, isAllowed: true, imageNumber: 5 },
+          { image: "diya.webp", amount: 40, isAllowed: true, imageNumber: 6 },
+          { image: "bucket.jpg", amount: 10, isAllowed: true, imageNumber: 7 },
+          { image: "kite.webp", amount: 35, isAllowed: true, imageNumber: 8 },
+          { image: "rat.webp", amount: 45, isAllowed: true, imageNumber: 9 },
+          { image: "umberlla.jpg", amount: 60, isAllowed: true, imageNumber: 10 },
+          { image: "parrot.webp", amount: 55, isAllowed: true, imageNumber: 11 },
+          { image: "sun.webp", amount: 70, isAllowed: true, imageNumber: 12 }
+        ];
+        const newEntry = new titliWinnerModel({ Images: defaultImages });
+        await newEntry.save();
+        allowedEntries = [newEntry];
+      } else {
+        allowedEntries = [latestEntry];
+      }
+    } catch (dbError) {
+      console.error('Error fetching image data from database:', dbError);
+      // Even if there's an error, we should start a new round after a timeout
+      setTimeout(() => {
+        startNewTitliRound();
+      }, 5000);
+      return;
+    }
+    
+    // Flatten all allowed images into a single array
+    const allAllowedImages = allowedEntries.flatMap(entry =>
+      entry.Images.filter(img => img.isAllowed === true) // Explicitly check for true
+    );
+    
+    console.log(`Found ${allAllowedImages.length} allowed images for winner selection`);
+    
+    if (!allAllowedImages.length) {
+      console.error('No allowed images found for revealing result - using fallback');
+      // Use a fallback - take any image to avoid game disruption
+      const fallbackImage = allowedEntries[0].Images[0];
+      titliGameState.winningImage = fallbackImage.image;
+      titliGameState.winningImageNumber = fallbackImage.imageNumber;
+      
+      console.log(`Using fallback image: ${titliGameState.winningImage} (${titliGameState.winningImageNumber})`);
+      
+      // Broadcast result
+      io.emit('titli:revealResult', {
+        roundId: titliGameState.currentRound,
+        winningImage: titliGameState.winningImage,
+        winningImageNumber: titliGameState.winningImageNumber,
+        isFallback: true
+      });
+      
+      // Process winners
+      processWinners(titliGameState.currentRound, titliGameState.winningImage, titliGameState.winningImageNumber);
+      
+      // Start a new round after a delay
+      setTimeout(() => {
+        startNewTitliRound();
+      }, 5000);
+      return;
+    }
+    
+    // Select a random image from allowed ones
+    const randomImage = allAllowedImages[Math.floor(Math.random() * allAllowedImages.length)];
+    titliGameState.winningImage = randomImage.image;
+    titliGameState.winningImageNumber = randomImage.imageNumber;
+    
+    console.log(`Selected winning image: ${titliGameState.winningImage} (Number: ${titliGameState.winningImageNumber})`);
+    
+    // Broadcast result to all clients
+    io.emit('titli:revealResult', {
+      roundId: titliGameState.currentRound,
+      winningImage: titliGameState.winningImage,
+      winningImageNumber: titliGameState.winningImageNumber,
+      isRandom: true
+    });
+    
+    // Process winners for this round
+    processWinners(titliGameState.currentRound, titliGameState.winningImage, titliGameState.winningImageNumber);
+    
+    console.log(`Titli round ${titliGameState.currentRound} result revealed: ${titliGameState.winningImage} (Number: ${titliGameState.winningImageNumber})`);
+    
+    // Wait 5 seconds before starting a new round
+    setTimeout(() => {
+      startNewTitliRound();
+    }, 5000);
+  } catch (error) {
+    console.error('Error ending Titli betting phase:', error);
+    // Even if there's an error, we should start a new round after a timeout
+    setTimeout(() => {
+      startNewTitliRound();
+    }, 5000);
+  }
+};
+
+// Process bet winners for a completed round
+const processWinners = async (roundId, winningImage, winningImageNumber) => {
+  try {
+    const User_Wallet = require('./models/Wallet');
+    const PappuModel = require('./models/papuModel');
+    
+    // Find all bets for this round
+    const bets = await PappuModel.find({ 
+      titliGameId: roundId
+    });
+    
+    console.log(`Processing ${bets.length} bets for round ${roundId}`);
+    console.log(`Winning image: ${winningImage}, winning number: ${winningImageNumber}`);
+    
+    // Get image to number mapping
+    const titliWinnerModel = require('./models/TitliWinner');
+    const imageData = await titliWinnerModel.find().sort({ createdAt: -1 }).limit(1);
+    
+    let imageNumberMapping = {};
+    if (imageData.length > 0 && imageData[0].Images) {
+      imageData[0].Images.forEach(img => {
+        imageNumberMapping[img.image] = img.imageNumber;
+        console.log(`Mapping: ${img.image} -> ${img.imageNumber}`);
+      });
+    } else {
+      // Fallback hardcoded mapping
+      imageNumberMapping = {
+        "butterfly.jpg": 1,
+        "cow.jpg": 2,
+        "football.jpg": 3,
+        "spin.jpg": 4,
+        "flower.webp": 5,
+        "diya.webp": 6,
+        "bucket.jpg": 7,
+        "kite.webp": 8,
+        "rat.webp": 9,
+        "umberlla.jpg": 10,
+        "parrot.webp": 11,
+        "sun.webp": 12
+      };
+      console.log('Using fallback image number mapping');
+    }
+    
+    let totalWinners = 0;
+    let totalPayout = 0;
+    
+    // Process each bet
+    for (const bet of bets) {
+      console.log(`Processing bet for user: ${bet.user}, game: ${roundId}`);
+      
+      const userSelectedCards = bet.selectedCard || [];
+      let isWin = false;
+      let totalProfit = 0;
+      let winningCards = [];
+      
+      // Determine if any selected card matches the winning image/number
+      for (const card of userSelectedCards) {
+        const cardImage = card.image;
+        const cardImageNumber = imageNumberMapping[cardImage];
+        
+        console.log(`Checking card: ${cardImage} (${cardImageNumber}) against winner: ${winningImage} (${winningImageNumber})`);
+        
+        // Winning condition: either image name matches OR image number matches
+        if (cardImage === winningImage || cardImageNumber === winningImageNumber) {
+          isWin = true;
+          const betAmount = card.betAmount || 0;
+          // Calculate profit (10x the bet amount)
+          const profit = betAmount * 10;
+          totalProfit += profit;
+          winningCards.push({
+            image: cardImage,
+            imageNumber: cardImageNumber,
+            betAmount,
+            profit
+          });
+          console.log(`WIN! User ${bet.user} won ${profit} on ${cardImage}`);
+        }
+      }
+      
+      // Update bet with result
+      bet.isCompleted = true;
+      bet.isWin = isWin;
+      bet.profit = totalProfit;
+      bet.winningImage = winningImage;
+      bet.winningCards = winningCards;
+      await bet.save();
+      
+      // If win, update user wallet
+      if (isWin && totalProfit > 0) {
+        try {
+          totalWinners++;
+          totalPayout += totalProfit;
+          
+          // First try with userId field
+          let userWallet = await User_Wallet.findOne({ userId: bet.user });
+          
+          // If not found, try directly with user field
+          if (!userWallet) {
+            userWallet = await User_Wallet.findOne({ user: bet.user });
+          }
+          
+          // If still not found, try with user as string
+          if (!userWallet) {
+            userWallet = await User_Wallet.findOne({ userId: bet.user.toString() });
+          }
+          
+          if (userWallet) {
+            console.log(`Found wallet for user ${bet.user}, current balance: ${userWallet.balance}`);
+            userWallet.balance += totalProfit;
+            await userWallet.save();
+            console.log(`Updated wallet balance to ${userWallet.balance} (+${totalProfit})`);
+            
+            // Emit win notification to user
+            io.emit('titli:winResult', {
+              userId: bet.user.toString(),
+              profit: totalProfit,
+              winningImage,
+              winningImageNumber,
+              winningCards
+            });
+            
+            console.log(`User ${bet.user} won ${totalProfit} on round ${roundId}`);
+          } else {
+            console.error(`Wallet not found for user ${bet.user}. Tried userId and user fields.`);
+          }
+        } catch (err) {
+          console.error(`Error updating wallet for user ${bet.user}:`, err);
+        }
+      }
+    }
+    
+    console.log(`Finished processing winners for round ${roundId}: ${totalWinners} winners, ${totalPayout} total payout`);
+    
+    // Broadcast summary of results
+    io.emit('titli:roundSummary', {
+      roundId,
+      winningImage,
+      winningImageNumber,
+      totalWinners,
+      totalPayout
+    });
+    
+  } catch (error) {
+    console.error('Error processing winners:', error);
+  }
+};
+
+// Start the Titli game on server startup
+startNewTitliRound();
+
+// Run timer update every second
+setInterval(updateTitliTimer, 1000);
+
+// Add a game health monitor to automatically recover if game becomes inactive
+setInterval(() => {
+  if (!titliGameState || !titliGameState.currentRound) {
+    console.log('Game health monitor detected inactive game - restarting game');
+    startNewTitliRound();
+  } else if (titliGameState.gamePhase === 'betting' && 
+             titliGameState.roundStartTime && 
+             Date.now() - titliGameState.roundStartTime > 60000) {
+    // If a round has been in betting phase for more than 60 seconds, it's likely stuck
+    console.log('Game health monitor detected stuck round - forcing new round');
+    endTitliBettingPhase();
+  }
+}, 15000); // Check every 15 seconds
+
+// Socket connection handler
+io.on('connection', (socket) => {
+  console.log(`Client connected: ${socket.id}`);
+  
+  // Handle client joining Titli game
+  socket.on('titli:join', () => {
+    // If game is not initialized, start it
+    if (!titliGameState.currentRound) {
+      console.log('New client connection triggered game start');
+      startNewTitliRound();
+    }
+    
+    // Send current game state to the client that just joined
+    socket.emit('titli:gameState', {
+      roundId: titliGameState.currentRound,
+      timeRemaining: titliGameState.timeRemaining,
+      gamePhase: titliGameState.gamePhase,
+      bettingOpen: titliGameState.bettingOpen,
+      winningImage: titliGameState.gamePhase === 'result' ? titliGameState.winningImage : null,
+      winningImageNumber: titliGameState.gamePhase === 'result' ? titliGameState.winningImageNumber : null
+    });
+    
+    titliGameState.participants.add(socket.id);
+  });
+  
+  // Handle client placing bet
+  socket.on('titli:placeBet', async (betData) => {
+    // Forward this to the frontend through API calls
+    console.log(`Client ${socket.id} placed bet in round ${titliGameState.currentRound}:`, betData);
+  });
+  
+  // Handle disconnection
+  socket.on('disconnect', () => {
+    titliGameState.participants.delete(socket.id);
+    console.log(`Client disconnected: ${socket.id}`);
+  });
+
+  // Handle client requesting next image reveal
+  socket.on('titli:requestNextImage', (data) => {
+    // Check if we have the winning image available
+    if (titliGameState.winningImage && data.gameId === titliGameState.currentRound) {
+      socket.emit('titli:nextImage', {
+        index: data.currentIndex + 1, // Next index
+        winningImage: titliGameState.winningImage,
+        winningImageNumber: titliGameState.winningImageNumber
+      });
+    }
+  });
+});
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server started on port ${PORT}`);
 });
+
+// Expose these functions for use in other files like titliWinnerController
+exports.startNewTitliRound = startNewTitliRound;
+exports.endTitliBettingPhase = endTitliBettingPhase;
