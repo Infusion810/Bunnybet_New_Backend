@@ -30,6 +30,7 @@ const minesRouter = require('./Routes/minesRoute.js')
 const bankDetailsRouter = require("./controller/bankDetails.js")
 const http = require("http");
 const matchRouter = require("./Routes/matchRouter.js")
+const aviatorSocketController = require('./controller/aviatorSocketController');
 const socketIo = require("socket.io");
 const server = http.createServer(app);
 const aarParParchiRouter = require('./Routes/aarPaarParchiRoutes.js');
