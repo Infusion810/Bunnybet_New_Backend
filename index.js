@@ -45,8 +45,8 @@ const io = socketIo(server, {
   },
 });
 
-// Initialize the Aviator game socket controller
-aviatorSocketController.initializeGame(io);
+// // Initialize the Aviator game socket controller
+// aviatorSocketController.initializeGame(io);
 
 port = 5000
 // CORS configuration
