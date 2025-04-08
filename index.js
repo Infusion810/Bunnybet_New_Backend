@@ -45,8 +45,7 @@ const io = socketIo(server, {
   },
 });
 
-// // Initialize the Aviator game socket controller
-// aviatorSocketController.initializeGame(io);
+
 
 port = 5000
 // CORS configuration
@@ -65,7 +64,8 @@ const MONGO_URI = process.env.mongodb_url;
 mongoose.connect(`mongodb+srv://siddharthojha421:yPlKyyZpefa9Y5lJ@cluster0.rtjwl.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`)
   .then(() => console.log("MongoDB Connected Successfully!"))
   .catch(err => console.error("MongoDB Connection Error:", err));
-
+// // Initialize the Aviator game socket controller
+aviatorSocketController.initializeGame(io);
   const NodeCache = require('node-cache');
   const cache = new NodeCache({ stdTTL: 60 });
   
