@@ -644,6 +644,7 @@ const fetchOngoingMatches = async () => {
       matchName: match.matchName,
       marketId: match.marketId,
       scoreIframe: match.scoreIframe,
+      matchDate: match.matchDate,
     }));
     io.emit("updateMatches", liveData.matches);
   } catch (error) {
