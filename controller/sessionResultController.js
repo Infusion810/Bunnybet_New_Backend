@@ -518,10 +518,24 @@ const User_wallet = require('../models/Wallet');
 const createSessionResult = async (req, res) => {
     try {
         const { result, runs, matchName, noRuns, yesRuns, match } = req.body;
-        console.log(req.body);
+      
 
         // Fetch bet data for the match
         const betData = await Bet.find({ matchName: match, matbet: matchName ,result:"Pending"});
+        const betDataCancel = await Bet.find({ matchName: match, matbet: matchName ,result:"cancel"});
+      
+        for(let bet2 of betDataCancel){
+            const userWallet = await User_wallet.findOne({ user: bet2.userId });
+         
+            if (!userWallet) {
+                console.error(`Wallet not found for user: ${bet2.user}`);
+                continue;
+              }
+              userWallet.exposureBalance-= Math.abs(Number(bet2.exposure));
+              bet2.result = "Complete";
+              await userWallet.save();
+              await bet2.save();
+        }
 
         let userWalletUpdates = {}; // To track each user's wallet updates
 
@@ -554,7 +568,7 @@ const createSessionResult = async (req, res) => {
                 console.log(updatedStatus, "no");
                 userWalletUpdates[bet.userId].exposureChange -= betExposure; // Still reset only this bet's exposure
             }
-            bet.result = "Complete";
+             bet.result = "Complete";
         }
         // Apply accumulated wallet updates
         for (let userId in userWalletUpdates) {
@@ -574,7 +588,6 @@ const createSessionResult = async (req, res) => {
         res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }
 };
-
 // Get all session results
 const getAllSessionResults = async (req, res) => {
     try {
