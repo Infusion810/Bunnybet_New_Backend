@@ -697,7 +697,7 @@ const fetchOdds = async () => {
 };
 
 // Run functions every second
-setInterval(fetchOngoingMatches, 1000);
+setInterval(fetchOngoingMatches, 100000);
 setInterval(fetchOdds, 1000);
 
 // API Route: Fetch odds from backend cache
