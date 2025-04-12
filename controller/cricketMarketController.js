@@ -1,6 +1,6 @@
 const Bet = require('../models/cricketMarketModel');
 const User_Wallet = require('../models/Wallet');
-const MatchK = require("../models/marketLogicModel")
+const MatchK = require("../models/marketLogicModel");
 exports.createBet = async (req, res) => {
     try {
         const { myBets } = req.body;
@@ -103,9 +103,11 @@ exports.createBet = async (req, res) => {
                         userWallet.exposureBalance = userWallet.exposureBalance+exposureDiff-prevExposure;
                         userWallet.balance =userWallet.balance-exposureDiff+prevExposure;
                         previousOppositeBet.exposure=0;
-                        await previousOppositeBet.save();
-                        await userWallet.save();
                         betsToSave.push(bet);
+                        await userWallet.save();
+                        await previousOppositeBet.save();
+                    
+                       
                     }else if(exposureDiff===0){
 
                         const YesRuns = mode === "yes" ? runs : undefined;
@@ -131,9 +133,11 @@ exports.createBet = async (req, res) => {
                         userWallet.exposureBalance -= prevExposure;
                         userWallet.balance =userWallet.balance-exposureDiff+prevExposure;
                         previousOppositeBet.exposure=0;
-                        await previousOppositeBet.save();
-                        await userWallet.save();
                         betsToSave.push(bet);
+                        await userWallet.save();
+                        await previousOppositeBet.save();
+                        
+                       
                     }
                 } else {
                    
@@ -232,6 +236,7 @@ exports.createBet = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+
 
 
 
