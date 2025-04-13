@@ -41,7 +41,7 @@ const marketLogicRoutes = require('./Routes/marketLogicRoutes.js')
 const sessionResultRoutes = require("./Routes/sessionResultRoutes.js")
 const pageRoutes = require("./Routes/pagesRoute.js");
 const deletedataRoute = require("./Routes/deletedataRoute.js")
-
+const adminRoutes = require("./Routes/adminRoutes.js")
 
 const io = socketIo(server, {
   cors: {
@@ -547,76 +547,77 @@ app.use("/", cricketMarketRoutes);
 app.use("/", sessionResultRoutes);
 app.use('/api', pageRoutes);
 app.use('/api',deletedataRoute);
+app.use('/api/admin', adminRoutes);
 // Add endpoint for fetching matches by sport ID
-app.get('/api/matches/:sportId', (req, res) => {
-  const { sportId } = req.params;
+// app.get('/api/matches/:sportId', (req, res) => {
+//   const { sportId } = req.params;
   
-  // For cricket (sportId = 4), return the live matches
-  if (sportId === '4') {
-    // Format data to match expected frontend structure
-    const formattedMatches = liveData.matches.map(match => ({
-      id: match.eventId,
-      matchId: match.eventId,
-      name: match.matchName,
-      event_date: new Date().toISOString(), // Current date as this is live
-      league: { name: 'Cricket League' },
-      status: 'live',
-      marketId: match.marketId,
-      scoreIframe: match.scoreIframe
-    }));
+//   // For cricket (sportId = 4), return the live matches
+//   if (sportId === '4') {
+//     // Format data to match expected frontend structure
+//     const formattedMatches = liveData.matches.map(match => ({
+//       id: match.eventId,
+//       matchId: match.eventId,
+//       name: match.matchName,
+//       event_date: new Date().toISOString(), // Current date as this is live
+//       league: { name: 'Cricket League' },
+//       status: 'live',
+//       marketId: match.marketId,
+//       scoreIframe: match.scoreIframe
+//     }));
     
-    return res.json({
-      success: true,
-      data: formattedMatches
-    });
-  }
+//     return res.json({
+//       success: true,
+//       data: formattedMatches
+//     });
+//   }
   
-  // For other sports, return empty array for now
-  // TODO: Implement other sports
-  return res.json({
-    success: true,
-    data: []
-  });
-});
+//   // For other sports, return empty array for now
+//   // TODO: Implement other sports
+//   return res.json({
+//     success: true,
+//     data: []
+//   });
+// });
 
-// Define endpoint for match details
-app.get('/api/match/:eventId', (req, res) => {
-  const { eventId } = req.params;
+// // Define endpoint for match details
+// app.get('/api/match/:eventId', (req, res) => {
+//   const { eventId } = req.params;
   
-  // Find the match in liveData
-  const match = liveData.matches.find(m => m.eventId === eventId);
+//   // Find the match in liveData
+//   const match = liveData.matches.find(m => m.eventId === eventId);
   
-  if (!match) {
-    return res.status(404).json({
-      success: false,
-      message: 'Match not found'
-    });
-  }
+//   if (!match) {
+//     return res.status(404).json({
+//       success: false,
+//       message: 'Match not found'
+//     });
+//   }
   
-  // Get odds for this match
-  const matchOdds = liveData.odds[match.marketId] || {};
+//   // Get odds for this match
+//   const matchOdds = liveData.odds[match.marketId] || {};
   
-  // Format response
-  const matchData = {
-    match: {
-      id: match.eventId,
-      name: match.matchName,
-      marketId: match.marketId,
-      scoreIframe: match.scoreIframe,
-      status: 'OPEN',
-      runners: matchOdds.matchOdds || [],
-      minStake: 100,
-      maxStake: 10000,
-      betDelay: 0
-    },
-    markets: [],
-    fancyMarkets: matchOdds.fancyMarkets || [],
-    bookmakers: [],
-    upcoming: []
-  };
+//   // Format response
+//   const matchData = {
+//     match: {
+//       id: match.eventId,
+//       name: match.matchName,
+//       marketId: match.marketId,
+//       scoreIframe: match.scoreIframe,
+//       status: 'OPEN',
+//       runners: matchOdds.matchOdds || [],
+//       minStake: 100,
+//       maxStake: 10000,
+//       betDelay: 0
+//     },
+//     markets: [],
+//     fancyMarkets: matchOdds.fancyMarkets || [],
+//     bookmakers: [],
+//     upcoming: []
+//   };
   
-  return res.json(matchData);
-});
+//   return res.json(matchData);
+// });
 
 let liveData = {
   matches: [],
