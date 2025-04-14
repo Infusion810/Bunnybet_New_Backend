@@ -64,12 +64,12 @@ exports.createBet = async (req, res) => {
                     const newProfitA = Math.abs(Number(profitA) || 0);
 
                     // const exposureUpdate = Math.abs(prevProfitA - newProfitA) + Math.abs(prevExposure-parsedExposure)-prevExposure;
-                    const exposureUpdate = Math.abs(prevProfitA - newProfitA)-prevExposure;
+                     const exposureUpdate = Math.abs(Math.abs(prevExposure + prevProfitA)-Math.abs(newProfitA + parsedExposure))-prevExposure;
                     userWallet.exposureBalance += exposureUpdate;
                     userWallet.balance =balance;
                     await userWallet.save();
                     previousOppositeBet.result="cancel";
-                    previousOppositeBet.exposure=Math.abs(prevProfitA - newProfitA);
+                    previousOppositeBet.exposure=Math.abs(Math.abs(prevExposure + prevProfitA)-Math.abs(newProfitA + parsedExposure))
                     await previousOppositeBet.save();
                     return res.status(201).json("Bet cancel each other");
                     console.log(`Wallet updated for same runs and opposite bet: ${userId}, Balance = ${userWallet.balance}, Exposure = ${userWallet.exposureBalance}`);
