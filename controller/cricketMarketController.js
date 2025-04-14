@@ -474,3 +474,22 @@ exports.resetAllBet = async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 };
+
+
+// Get bets by userId using query parameter
+exports.getBetsByUserId = async (req, res) => {
+    try {
+        const { userId } = req.query;
+        
+        if (!userId) {
+            return res.status(400).json({ error: "UserId is required" });
+        }
+
+        const bets = await Bet.find({ userId: userId })
+            .sort({ createdAt: -1 });
+
+        res.json(bets);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+};
