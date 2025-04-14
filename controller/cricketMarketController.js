@@ -55,7 +55,7 @@ exports.createBet = async (req, res) => {
             if (previousOppositeBet) {
                 const prevRuns = oppositeMode === "yes" ? previousOppositeBet.yesRuns : previousOppositeBet.noRuns;
                 console.log("previose bet",prevRuns)
-                if (prevRuns === runs) {
+              if (prevRuns === runs) {
                     // If runs match, update wallet and save bet
                  
 
@@ -63,16 +63,40 @@ exports.createBet = async (req, res) => {
                     const prevProfitA = Math.abs(Number(previousOppositeBet.profitA) || 0);
                     const newProfitA = Math.abs(Number(profitA) || 0);
 
+
+
+
+                    const YesRuns = mode === "yes" ? runs : undefined;
+                    const NoRuns = mode === "no" ? runs : undefined;
+        
+                    // Create Bet Entry
+                    const bet = new Bet({
+                        userId,
+                        matbet,
+                        mode,
+                        odds,
+                        rate,
+                        stake,
+                        profitA:0,
+                        profitB:0,
+                        balance,
+                        exposure:0,
+                        yesRuns: YesRuns,
+                        noRuns: NoRuns,
+                        matchName,
+                        result:"complete"
+                    });
+
+                    betsToSave.push(bet);
+
                     // const exposureUpdate = Math.abs(prevProfitA - newProfitA) + Math.abs(prevExposure-parsedExposure)-prevExposure;
-                     const exposureUpdate = Math.abs(Math.abs(prevExposure + prevProfitA)-Math.abs(newProfitA + parsedExposure))-prevExposure;
+                    const exposureUpdate = Math.abs(Math.abs(prevExposure + prevProfitA)-Math.abs(newProfitA + parsedExposure))-prevExposure;
                     userWallet.exposureBalance += exposureUpdate;
                     userWallet.balance =balance;
                     await userWallet.save();
                     previousOppositeBet.result="cancel";
                     previousOppositeBet.exposure=Math.abs(Math.abs(prevExposure + prevProfitA)-Math.abs(newProfitA + parsedExposure))
                     await previousOppositeBet.save();
-                    return res.status(201).json("Bet cancel each other");
-                    console.log(`Wallet updated for same runs and opposite bet: ${userId}, Balance = ${userWallet.balance}, Exposure = ${userWallet.exposureBalance}`);
                 }else if(prevRuns > runs){
                     const prevExposure = Math.abs(Number(previousOppositeBet.exposure) || 0);
                     const prevProfitA = Math.abs(Number(previousOppositeBet.profitA) || 0);
