@@ -144,6 +144,7 @@ const BetSchema = new mongoose.Schema({
     winningRuns: { type: Number , default:0},
     matchName: { type: String },
     result: { type: String, default: "Pending" },
+     prevRuns: { type: Number , default:0},
 }, { timestamps: true });
 
 module.exports = mongoose.model('CricketMarket1', BetSchema);
