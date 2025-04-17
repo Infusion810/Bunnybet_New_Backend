@@ -134,7 +134,33 @@ exports.createBet = async (req, res) => {
                        
                     }else if(exposureDiff===0){
 
-                        const YesRuns = mode === "yes" ? runs : undefined;
+                        // const YesRuns = mode === "yes" ? runs : undefined;
+                        // const NoRuns = mode === "no" ? runs : undefined;
+            
+                        // // Create Bet Entry
+                        // const bet = new Bet({
+                        //     userId,
+                        //     matbet,
+                        //     mode,
+                        //     odds,
+                        //     rate,
+                        //     stake,
+                        //     profitA,
+                        //     profitB,
+                        //     balance,
+                        //     exposure:0,
+                        //     yesRuns: YesRuns,
+                        //     noRuns: NoRuns,
+                        //     matchName
+                        // });
+
+                        // userWallet.exposureBalance -= prevExposure;
+                        // userWallet.balance =userWallet.balance-exposureDiff+prevExposure;
+                        // previousOppositeBet.exposure=0;
+                        // betsToSave.push(bet);
+                        // await userWallet.save();
+                        // await previousOppositeBet.save();
+                         const YesRuns = mode === "yes" ? runs : undefined;
                         const NoRuns = mode === "no" ? runs : undefined;
             
                         // Create Bet Entry
@@ -145,22 +171,24 @@ exports.createBet = async (req, res) => {
                             odds,
                             rate,
                             stake,
-                            profitA,
+                            profitA:newProfitA+prevProfitA,
                             profitB,
                             balance,
                             exposure:0,
                             yesRuns: YesRuns,
                             noRuns: NoRuns,
-                            matchName
+                            matchName,
+                            prevRuns:prevRuns,
+                            result:"canceltype2"
                         });
 
                         userWallet.exposureBalance -= prevExposure;
                         userWallet.balance =userWallet.balance-exposureDiff+prevExposure;
                         previousOppositeBet.exposure=0;
+                        previousOppositeBet.result="complete";
                         betsToSave.push(bet);
                         await userWallet.save();
                         await previousOppositeBet.save();
-                        
                        
                     }
                 } else {
