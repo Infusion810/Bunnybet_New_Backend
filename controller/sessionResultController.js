@@ -196,6 +196,26 @@ const createSessionResult = async (req, res) => {
         // Fetch bet data for the match
         const betData = await Bet.find({ matchName: match, matbet: matchName ,result:"Pending"});
         const betDataCancel = await Bet.find({ matchName: match, matbet: matchName ,result:"cancel"});
+        const canceltype2=await Bet.find({ matchName: match, matbet: matchName ,result:"canceltype2"});
+        console.log("cancel bala",betDataCancel);
+
+        for(let bet3 of canceltype2){
+            const userWallet = await User_wallet.findOne({ user: bet3.userId });
+            if (!userWallet) {
+                console.error(`Wallet not found for user: ${bet3.user}`);
+                continue;
+              }
+              if ( (parseInt(runs) > parseInt(prevRuns) && parseInt(runs) < (parseInt(bet3.noRuns) + parseInt(bet3.yesRuns))) || (parseInt(runs) > (parseInt(bet3.noRuns) + parseInt(bet3.yesRuns)) && parseInt(runs) < parseInt(prevRuns))) {
+                userWallet.balance+= Math.abs(Number(bet3.profitA));
+                bet3.result = "Complete";
+                await userWallet.save();
+                await bet3.save();
+              }
+              
+           
+              bet3.result = "Complete";
+              await bet3.save();
+        }
         console.log("cancel bala",betDataCancel);
         for(let bet2 of betDataCancel){
             const userWallet = await User_wallet.findOne({ user: bet2.userId });
