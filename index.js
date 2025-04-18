@@ -65,7 +65,7 @@ port = 5000
 
 app.use(
   cors({
-    origin: ["https://www.98fastbet.com", "https://admin.98fastbet.com","https://matka.98fastbet.com","https://payment.98fastbet.com","https://avaitor.98fastbet.com","https://market.98fastbet.com","https://titli.98fastbet.com"], // Replace '*' with the specific origin(s) you want to allow, e.g., 'https://yourdomain.com'
+    origin: ["https://admin.bunnybet9.in","https://www.bunnybet9.in"], // Replace '*' with the specific origin(s) you want to allow, e.g., 'https://yourdomain.com'
     methods: ['POST', 'GET', 'PUT', 'DELETE'], // Define allowed HTTP methods
     credentials: true, // Allow credentials like cookies to be sent
   })
@@ -1254,11 +1254,10 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server started on port ${PORT}`);
 });
-
 // Expose these functions for use in other files like titliWinnerController
 exports.startNewTitliRound = startNewTitliRound;
 exports.endTitliBettingPhase = endTitliBettingPhase;
