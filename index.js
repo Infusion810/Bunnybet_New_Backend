@@ -395,7 +395,7 @@ app.get('/api/name/:id', async (req, res) => {
       walletBalance: wallet.balance, 
       exposureBalance: wallet.exposureBalance || 0, 
       email: user.email,
-      userNo: user.userNo 
+     
     });
   } catch (error) {
     console.error('Error fetching user:', error);
@@ -404,6 +404,7 @@ app.get('/api/name/:id', async (req, res) => {
 });
 
 
+// Sign Up Route
 // Sign Up Route
 app.post('/api/signup', async (req, res) => {
   const { username, email, password } = req.body;
@@ -420,12 +421,12 @@ app.post('/api/signup', async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    let userNo;
-    let count = 5000;
-    do {
-      userNo = `C${count}`;
-      count++;
-    } while (await User.findOne({ userNo }));
+    // let userNo;
+    // let count = 5000;
+    // do {
+    //   userNo = `C${count}`;
+    //   count++;
+    // } while (await User.findOne({ userNo }));
 
     // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -435,7 +436,6 @@ app.post('/api/signup', async (req, res) => {
       username,
       email,
       password: hashedPassword,
-      userNo,
     });
 
     const savedUser = await newUser.save();
@@ -454,7 +454,7 @@ app.post('/api/signup', async (req, res) => {
     // Respond with success
     res.status(201).json({
       message: 'User registered successfully',
-      user: { id: savedUser._id, username: savedUser.username, email: savedUser.email ,userNo:savedUser.userNo},
+      user: { id: savedUser._id, username: savedUser.username, email: savedUser.email },
     });
   } catch (err) {
     console.error(err);
@@ -464,14 +464,14 @@ app.post('/api/signup', async (req, res) => {
 
 // Login Route
 app.post('/api/login', async (req, res) => {
-  const { userNo, password } = req.body;
+  const { username, password } = req.body;
 
-  if (!userNo || !password) {
+  if (!username || !password) {
     return res.status(400).json({ message: 'Username and password are required' });
   }
 
   try {
-    const user = await User.findOne({ userNo }).populate('wallet');
+    const user = await User.findOne({ username }).populate('wallet');
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -491,7 +491,7 @@ app.post('/api/login', async (req, res) => {
         username: user.username,
         email: user.email,
         walletBalance: user.wallet?.balance || 0,
-        userNo:user.userNo,
+  
       },
     });
   } catch (err) {
